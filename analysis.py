@@ -6,8 +6,6 @@ from scipy.fft import fft, fftfreq
 import matplotlib.colors as mcolors
 from scipy.signal import spectrogram
 
-from old.audio_pipeline_old import AudioPipeline
-
 
 class Analysis:
     def __init__(
@@ -105,31 +103,24 @@ class Analysis:
             n_fft (int): FFT window size (default: 2048).
             cmap (str): Matplotlib colormap (default: 'viridis').
         """
-        # --- Step 1: Mix all audio segments into one ---
         mixed = audio_segments[0]
         for seg in audio_segments[1:]:
             mixed = mixed.overlay(seg)
 
-        # Convert to numpy array
         samples = np.array(mixed.get_array_of_samples())
 
-        # Handle stereo (take left channel if stereo)
         if mixed.channels == 2:
             samples = samples[::2]
 
-        # Normalize to [-1, 1]
         samples = self._pipeline.nparray_to_tanh_normal(samples)
 
-        # --- Step 2: Compute FFT and frequency spectrum ---
         yf = fft(samples)
         xf = fftfreq(len(samples), 1 / self.__sample_rate)
 
-        # Take only positive frequencies (magnitude spectrum)
         half_n = len(xf) // 2
         xf = xf[:half_n]
-        yf = np.abs(yf[:half_n])  # Magnitude
+        yf = np.abs(yf[:half_n])
 
-        # --- Step 3: Plot the spectrum (brightest = most common frequencies) ---
         plt.figure(figsize=self.figsize)
         plt.specgram(
             samples,
@@ -152,11 +143,9 @@ class Analysis:
             audio_segments (list): List of pydub.AudioSegment objects.
             window_ms (int): Time window (in ms) for volume averaging (default: 50ms).
         """
-        # --- Step 1: Check for empty inputs ---
         if not audio_segments:
             raise ValueError("Input list 'audio_segments' is empty!")
 
-        # --- Step 2: Mix all segments (if multiple) ---
         mixed = audio_segments[0]
         for seg in audio_segments[1:]:
             if seg.frame_count() == 0:
@@ -164,36 +153,28 @@ class Analysis:
                 continue
             mixed = mixed.overlay(seg)
 
-        # --- Step 3: Extract samples ---
         samples = np.array(mixed.get_array_of_samples())
 
         if len(samples) == 0:
             raise ValueError("Mixed audio has zero samples!")
 
-        # Convert stereo to mono (if needed)
         if mixed.channels == 2:
             samples = samples.reshape(-1, 2)
-            samples = samples.mean(axis=1)  # Average channels
+            samples = samples.mean(axis=1)
 
-        # Normalize to [-1, 1]
         samples = self._pipeline.nparray_to_tanh_normal(samples)
 
-        # --- Step 4: Compute RMS (Root Mean Square) volume ---
-        window_size = int(
-            self.window * self.__sample_rate / 1000
-        )  # Convert ms to samples
+        window_size = int(self.window * self.__sample_rate / 1000)
         rms = []
 
         for i in range(0, len(samples), window_size):
             chunk = samples[i : i + window_size]
             if len(chunk) == 0:
                 continue
-            rms.append(np.sqrt(np.mean(chunk**2)))  # RMS calculation
+            rms.append(np.sqrt(np.mean(chunk**2)))
 
-        # Time axis (convert samples to seconds)
         times = np.arange(len(rms)) * (self.window / 1000)
 
-        # --- Step 5: Plot ---
         plt.figure(figsize=self.figsize)
         plt.plot(times, rms, color="blue", label="RMS Volume")
         plt.xlabel("Time (s)")
@@ -208,36 +189,28 @@ class Analysis:
         Mixes multiple AudioSegments, computes their combined frequency spectrum,
         and plots it on a log-frequency axis with human-readable tick labels.
         """
-        # --- Step 1: Mix all audio segments into one ---
         mixed = audio_segments[0]
         for seg in audio_segments[1:]:
             mixed = mixed.overlay(seg)
 
-        # Convert to numpy array
         samples = np.array(mixed.get_array_of_samples())
 
-        # Handle stereo (take left channel if stereo)
         if mixed.channels == 2:
             samples = samples[::2]
 
-        # Normalize to [-1, 1]
         samples = self._pipeline.nparray_to_tanh_normal(samples)
 
-        # --- Step 2: Compute FFT and frequency spectrum ---
         yf = fft(samples)
         xf = fftfreq(len(samples), 1 / self.__sample_rate)
 
-        # Take only positive frequencies (magnitude spectrum)
         half_n = len(xf) // 2
         xf = xf[:half_n]
         yf = np.abs(yf[:half_n])
 
-        # Avoid log(0) by filtering out zero or near-zero frequencies
         mask = xf > 0
         xf = xf[mask]
         yf = yf[mask]
 
-        # --- Plotting with log scale and human-readable frequency ticks ---
         plt.figure(figsize=self.figsize)
         plt.plot(xf, yf, color="blue", alpha=0.7)
         plt.xscale("log")
@@ -245,7 +218,6 @@ class Analysis:
         plt.ylabel("Magnitude")
         plt.title("Combined Magnitude Spectrum (Log Frequency Scale)")
 
-        # Customize tick formatting
         plt.gca().xaxis.set_major_formatter(ScalarFormatter())
         plt.gca().xaxis.set_minor_formatter(ScalarFormatter())
         plt.xticks([tick for tick in self._xticks if tick <= self.__nyquist])
@@ -264,7 +236,6 @@ class Analysis:
             samples = samples[::2]
         samples = self._pipeline.nparray_to_tanh_normal(samples)
 
-        # --- Step 2: Compute spectrogram ---
         f, t, Sxx = spectrogram(
             samples,
             fs=self.__sample_rate,
@@ -273,10 +244,8 @@ class Analysis:
             mode="magnitude",
         )
 
-        # Convert amplitude to dB
         Sxx_dB = 10 * np.log10(Sxx + 1e-10)
 
-        # --- Step 3: Plot with log-scaled frequency axis ---
         plt.figure(figsize=self.figsize)
         plt.imshow(
             Sxx_dB,
@@ -291,7 +260,6 @@ class Analysis:
         plt.ylabel("Frequency (Hz)")
         plt.title("Combined Frequency Spectrum (Log Scale)")
 
-        # Set y-ticks to common log-frequency values
         log_freqs = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]
         plt.yticks(log_freqs, [str(f) for f in log_freqs])
         plt.grid(True, which="both", linestyle="--", alpha=0.3)

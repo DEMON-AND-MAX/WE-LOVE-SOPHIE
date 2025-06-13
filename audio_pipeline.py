@@ -173,8 +173,6 @@ class AudioPipeline:
         waveforms (list): List of waveform lists to be layered.
         """
         layered = []
-        # print(len(waveforms[0]), "waveforms in first list")
-        # print(len(waveforms), "lists in waveforms")
         for i in range(len(waveforms[0])):
             vertical = []
             for list in waveforms:

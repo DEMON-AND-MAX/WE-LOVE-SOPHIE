@@ -12,21 +12,19 @@ def spectral_loss(y_true, y_pred, fft_size=256, hop_size=128):
             x, frame_length=fft_size, frame_step=hop_size, pad_end=True
         )
 
-    # STFT returns complex values, take magnitude
     y_true_spec = tf.abs(_stft(y_true))
     y_pred_spec = tf.abs(_stft(y_pred))
 
-    # Log magnitude helps with perceptual scaling
     y_true_log = tf.math.log1p(y_true_spec)
     y_pred_log = tf.math.log1p(y_pred_spec)
 
-    return tf.reduce_mean(tf.abs(y_true_log - y_pred_log))  # L1 loss
+    return tf.reduce_mean(tf.abs(y_true_log - y_pred_log))
 
 
 def combined_loss(y_true, y_pred):
     mse = tf.reduce_mean(tf.square(y_true - y_pred))
     spec = spectral_loss(y_true, y_pred)
-    return mse + 1 * spec  # you can tune the weight
+    return mse + 1 * spec
 
 
 if __name__ == "__main__":
@@ -86,14 +84,14 @@ if __name__ == "__main__":
         x=x_train,
         y=y_train,
         batch_size=8,
-        epochs=10,
+        epochs=3,
         validation_split=0.1,
         learning_rate=0.0005,
         loss=combined_loss,
         callbacks=[scheduler, stopper],
     )
 
-    autoencoder.save_model("C:\\Users\\cools\\Desktop\\datasets\\dataset_b\\fund_model")
+    autoencoder.save_model("C:\\Users\\cools\\Desktop\\datasets\\models\\fund_model")
 
     analysis.plot_history(history=history)
 
@@ -103,15 +101,15 @@ if __name__ == "__main__":
 
     audio_pipeline.export_audio_segments_to_wav(
         predicted_y,
-        "C:\\Users\\cools\\Desktop\\datasets\\dataset_b\\fund_model\\predicted",
+        "C:\\Users\\cools\\Desktop\\datasets\\models\\fund_model\\predicted",
     )
     audio_pipeline.export_audio_segments_to_wav(
         original_x,
-        "C:\\Users\\cools\\Desktop\\datasets\\dataset_b\\fund_model\\original_x",
+        "C:\\Users\\cools\\Desktop\\datasets\\models\\fund_model\\original_x",
     )
     audio_pipeline.export_audio_segments_to_wav(
         original_y,
-        "C:\\Users\\cools\\Desktop\\datasets\\dataset_b\\fund_model\\original_y",
+        "C:\\Users\\cools\\Desktop\\datasets\\models\\fund_model\\original_y",
     )
 
     analysis.plot_average_volume(original_x)

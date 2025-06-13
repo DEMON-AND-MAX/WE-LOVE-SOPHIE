@@ -1,14 +1,36 @@
 import numpy as np
+import tensorflow as tf
 from analysis import Analysis
 from audio_pipeline import AudioPipeline
 from autoencoder import Autoencoder
 from keras._tf_keras.keras.callbacks import LearningRateScheduler, EarlyStopping
 
 
+def spectral_loss(y_true, y_pred, fft_size=256, hop_size=128):
+    def _stft(x):
+        return tf.signal.stft(
+            x, frame_length=fft_size, frame_step=hop_size, pad_end=True
+        )
+
+    y_true_spec = tf.abs(_stft(y_true))
+    y_pred_spec = tf.abs(_stft(y_pred))
+
+    y_true_log = tf.math.log1p(y_true_spec)
+    y_pred_log = tf.math.log1p(y_pred_spec)
+
+    return tf.reduce_mean(tf.abs(y_true_log - y_pred_log))
+
+
+def combined_loss(y_true, y_pred):
+    mse = tf.reduce_mean(tf.square(y_true - y_pred))
+    spec = spectral_loss(y_true, y_pred)
+    return mse + 1 * spec
+
+
 if __name__ == "__main__":
     audio_pipeline = AudioPipeline(
         sample_rate=16000,
-        sample_length=0.4,
+        sample_length=0.2,
         sample_width=2,
         sample_channels=1,
         sample_overlap=0.0,
@@ -25,32 +47,32 @@ if __name__ == "__main__":
         ["fund", "trans", "body"],
     )
 
-    # raw_layered = audio_pipeline.layer_waveform_lists(
-    #    [raw["fund"], raw["trans"], raw["body"]]
-    # )
+    raw_layered = audio_pipeline.layer_waveform_lists(
+        [raw["fund"], raw["trans"], raw["body"]], 0.1
+    )
 
     processed_fund = audio_pipeline.process_waveform_list(raw["fund"])
-    # processed_layered = audio_pipeline.process_waveform_list(raw_layered)
+    processed_layered = audio_pipeline.process_waveform_list(raw_layered)
 
-    x, _ = audio_pipeline.create_dataset_from_lists(
-        x_list=processed_fund, y_list=processed_fund
+    x, y = audio_pipeline.create_dataset_from_lists(
+        x_list=processed_layered, y_list=processed_fund
     )
 
-    print(np.min(x), np.max(x))
-
-    autoencoder = Autoencoder(pipeline=audio_pipeline, lowest_freq=80)
+    autoencoder = Autoencoder(pipeline=audio_pipeline, lowest_freq=200)
 
     autoencoder.generate_autoencoder(
-        latent_dim=8, filters=8, dropout=0.1, leave_skips=0
+        latent_dim=8, filters=8, dropout=0.3, leave_skips=0
     )
-    # autoencoder.load_model("C:\\Users\\cools\\Desktop\\datasets\\dataset_a\\model")
+    autoencoder.load_model(
+        "C:\\Users\\cools\\Desktop\\datasets\\models\\pretrain_model"
+    )
     autoencoder.print_summary()
 
     def schedule(epoch, lr):
         if epoch < 1:
             return lr
         else:
-            return lr * 0.9
+            return lr * 0.95
 
     scheduler = LearningRateScheduler(schedule, verbose=1)
     stopper = EarlyStopping(
@@ -63,15 +85,17 @@ if __name__ == "__main__":
     history = autoencoder.train_autoencoder(
         x=x_train,
         y=y_train,
-        batch_size=16,
-        epochs=5,
+        batch_size=8,
+        epochs=3,
         validation_split=0.1,
         learning_rate=0.0005,
-        loss="mse",
+        loss=combined_loss,
         callbacks=[scheduler, stopper],
     )
 
-    autoencoder.save_model("C:\\Users\\cools\\Desktop\\datasets\\dataset_b\\fund_model")
+    autoencoder.save_model(
+        "C:\\Users\\cools\\Desktop\\datasets\\models\\fine_tuned_model"
+    )
 
     analysis.plot_history(history=history)
 
@@ -81,15 +105,15 @@ if __name__ == "__main__":
 
     audio_pipeline.export_audio_segments_to_wav(
         predicted_y,
-        "C:\\Users\\cools\\Desktop\\datasets\\dataset_b\\fund_model\\predicted",
+        "C:\\Users\\cools\\Desktop\\datasets\\models\\fine_tuned_model\\predicted",
     )
     audio_pipeline.export_audio_segments_to_wav(
         original_x,
-        "C:\\Users\\cools\\Desktop\\datasets\\dataset_b\\fund_model\\original_x",
+        "C:\\Users\\cools\\Desktop\\datasets\\models\\fine_tuned_model\\original_x",
     )
     audio_pipeline.export_audio_segments_to_wav(
         original_y,
-        "C:\\Users\\cools\\Desktop\\datasets\\dataset_b\\fund_model\\original_y",
+        "C:\\Users\\cools\\Desktop\\datasets\\models\\fine_tuned_model\\original_y",
     )
 
     analysis.plot_average_volume(original_x)

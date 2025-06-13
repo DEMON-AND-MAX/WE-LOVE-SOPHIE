@@ -286,11 +286,9 @@ class Autoencoder:
         if self.autoencoder is None:
             raise ValueError("Autoencoder model is not initialized.")
 
-        # 1) run both inputs through the encoder (returns [latent, skip1, skip2, …])
         preds_x1 = self.encoder.predict(x1)
         preds_x2 = self.encoder.predict(x2)
 
-        # 2) pull out just the bottleneck vectors
         latent_x1 = np.asarray(preds_x1[0])
         latent_x2 = np.asarray(preds_x2[0])
         if latent_x1.shape != latent_x2.shape:
@@ -298,19 +296,14 @@ class Autoencoder:
                 f"Latent shapes must match, got {latent_x1.shape} vs {latent_x2.shape}"
             )
 
-        # 3) element‑wise interpolate the latent codes
         morphed_latent = (1 - alpha) * latent_x1 + alpha * latent_x2
 
-        # 4) leave all skip‑connection outputs untouched (take from x1, or x2 if you prefer)
-        skips = preds_x1[1:]  # e.g. [skip1_x1, skip2_x1, ...]
+        skips = preds_x1[1:]
 
-        # 5) build the full input list for the decoder: [morphed_latent, *skips]
         decoder_inputs = [morphed_latent] + skips
 
-        # 6) run it through the (multi‑input) decoder
         morphed = self.decoder.predict(decoder_inputs)
 
-        # 7) post‑process exactly as before
         if morphed.shape[-1] == 1:
             morphed = morphed.squeeze(-1)
         return self._pipeline._process_predicted(morphed)
